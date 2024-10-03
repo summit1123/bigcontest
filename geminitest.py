@@ -74,6 +74,20 @@ def recommend_by_average_spending(type: str, region:str=None, min_spending:str=N
         {"store_name": f"{type}2", "store_address": f"{region} 남쪽", "category": type},
     ]
 
+# 특정 조건에 따라 데이터를 검색하는 함수
+def search_by_conditions(region: str, business_type: str, sort_by: str, top_n: int = 1):
+    """특정 조건에 따라 상점을 검색합니다.
+    
+    Args:
+        region (str): 지역명 (예. 제주시 한림읍)
+        business_type (str): 업종명 (예. 카페)
+        sort_by (str): 정렬 기준 (예. "현지인 이용 비중", "30대 이용 비중")
+        top_n (int): 상위 몇 개의 가맹점을 반환할지 (기본값 1)
+        
+    Returns:
+        list: 조건에 맞는 상점 리스트
+    """
+
 
 
 # Function Repository 등록
@@ -98,14 +112,13 @@ if "chat_session" not in st.session_state:
 
 
 for content in st.session_state.chat_session.history:
-    # print("역할",content.role)
-    # print("체크", True if content.parts[0].text else False)
-    # print("파츠", len(content.parts))
-    print("컨텐츠", content)
     if (len(content.parts) > 1) or not content.parts[0].text:
             continue
     with st.chat_message("assistant" if content.role == "model" else "user"):
-        st.markdown(content.parts[0].text)
+        output = content.parts[0].text
+        if content.role == "user":
+            output = output[output.find("질문:")+3:]
+        st.markdown(output)
 
 if prompt := st.chat_input("메시지를 입력하세요."):    
     with st.chat_message("user"):
