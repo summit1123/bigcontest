@@ -77,15 +77,16 @@ def recommend_by_average_spending(type: str, region:str=None, min_spending:str=N
 
 
 # Function Repository 등록
-# function_repository = {
-#     "search_by_location": search_by_location
-# }
+function_repository = {
+    "search_by_location": search_by_location,
+    "recommend_by_average_spending": recommend_by_average_spending
+}
 
 instructions = "너는 제주도의 맛집을 추천해주는 사람이야. 사용자의 질문에서 키워드를 찾고 함수를 호출하여 필요한 것을 찾아. 가정과 예상, 역으로 사용자한테 찾으려 하지마"
 
 @st.cache_resource
 def load_model():
-    model = genai.GenerativeModel('gemini-1.5-flash', safety_settings=safe, tools=[search_by_location, recommend_by_average_spending], system_instruction=instructions)
+    model = genai.GenerativeModel('gemini-1.5-flash', safety_settings=safe, tools=function_repository.values(), system_instruction=instructions)
     print("model loaded...")
     return model
 
@@ -100,7 +101,7 @@ for content in st.session_state.chat_session.history:
     # print("역할",content.role)
     # print("체크", True if content.parts[0].text else False)
     # print("파츠", len(content.parts))
-    # print("컨텐츠", content)
+    print("컨텐츠", content)
     if (len(content.parts) > 1) or not content.parts[0].text:
             continue
     with st.chat_message("assistant" if content.role == "model" else "user"):
@@ -111,6 +112,7 @@ if prompt := st.chat_input("메시지를 입력하세요."):
         st.markdown(prompt)
     with st.chat_message("assistant"):
         edited_prompt = f"너는 제주도의 맛집을 추천해주는 사람이야. 사용자의 질문에서 키워드를 찾고 함수를 호출하여 필요한 것을 찾아. 가정과 예상, 역으로 사용자한테 찾으려 하지마, 사용된 함수를 사용한 판단근거를 함께 서술하세요\n질문: {prompt}"
+        
         response = st.session_state.chat_session.send_message(edited_prompt)  
         st.markdown(response.text)
         
