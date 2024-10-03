@@ -1,5 +1,7 @@
 import json
 import os
+import pandas as pd
+import numpy as np
 from sys import argv
 os.environ['KMP_DUPLICATE_LIB_OK']='TRUE'
 import google.generativeai as genai 
@@ -32,10 +34,21 @@ safe = [
 ]
 
 
-st.title("Gemini-Bot")
+
+@st.cache_resource
+def load_data():
+    # CSV 로드 - 일단 기본파일로 진행
+    csv_file_path = "JEJU_MCT_DATA_v2.csv"
+    df = pd.read_csv(os.path.join('./lowdata', csv_file_path),encoding='cp949')
+    # 최신연월 데이터만 가져옴
+    df = df[df['YM'] == df['YM'].max()].reset_index(drop=True)
+    return df
 
 
-# Streamlit 캐싱
+st.title("제주맛zip")
+
+
+
 
 def search_by_location(region: str, type: str):
     """특정 지역(예: 제주시 한림읍, 제주공항)의 특정 업종(예: 카페)인 식당목록을 반환합니다.
@@ -105,6 +118,7 @@ def load_model():
     return model
 
 model = load_model()
+df = load_data()
 history = []
 
 if "chat_session" not in st.session_state:    
