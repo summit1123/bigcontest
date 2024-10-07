@@ -1,2 +1,4 @@
 secrets.json
 geocoder.ipynb
+data_analyze.ipynb
+faiss_indexing.ipynb
