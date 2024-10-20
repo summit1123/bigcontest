@@ -224,8 +224,9 @@ def search_nearby_location(place: str):
     closest_idx, similarity_score = find_closest_name(place, place_data['MCT_NM'].values)
     # closest_idx = find_closest_name(not_space, place_data['MCT_NM'].values)
     # print(similarity_score, place_data.iloc[closest_idx])
+    print("장소 지정", place_data.iloc[closest_idx]['MCT_NM'], place_data.iloc[closest_idx]['ADDR'])
     place_location = np.array([[place_data.iloc[closest_idx]['Latitude'], place_data.iloc[closest_idx]['Longitude']]], dtype='float32')  # 사용자의 위도, 경도
-    k = 10
+    k = 30
     distances, indices = nearby_index.search(place_location, k)
     results = [
         f"이름: {df.iloc[indices[0][i]]['MCT_NM']}, 업종: {df.iloc[indices[0][i]]['MCT_TYPE']}, 주소: {df.iloc[indices[0][i]]['ADDR']}, 이용건수구간: 상위 {str(df.iloc[i]['UE_CNT_GRP'][2:]).replace('~', '-')}"
@@ -523,9 +524,18 @@ if user_input:
         dic = merge_dicts(json.loads(response.parts[0].text))
         print("JSON 데이터", dic)
 
-        # is_recommend 로 추천인지 검색인지 확인. 검색인것만 확실하면 2번 검색도 가능할것.
+        # is_recommend 로 추천인지 검색인지 확인. False(검색)일 경우 정확도를 위해 한번 더 검색 후 선택
         if not dic.get("is_recommend"):
-            output = filtering(dic)
+            response2 = model.generate_content(json_prompt, 
+            generation_config=genai.GenerationConfig(response_mime_type="application/json", response_schema=list[Query]),
+            tools=[]) 
+            dic2 = merge_dicts(json.loads(response2.parts[0].text))
+            # 조건 체크 (만약 처음엔 false였는데 갑자기 true)
+            if dic2.get("is_recommend", None):
+                print("원래 검색이였는데, 다음은 추천으로 인식")
+            correct_dic = dic if len(dic) > len(dic2) else dic2
+            print(f"2개 중 선택\n{dic}\n{dic2}\n->{correct_dic}")
+            output = filtering(correct_dic)
             print("검색 출력", output)
             st.markdown(output, unsafe_allow_html=True) # 이런식으로 직접 넣는거면, history를 통해서 채팅 재구성은 불가능하다. 직접 로그를 구성해야
         # 추천방식. 정확도가 필요없다. 아마 여기에 나이대, 성별 가중치를 적용할것(프롬프트로?)
