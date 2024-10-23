@@ -1,3 +1,9 @@
+import streamlit as st
+st.set_page_config(
+        page_title="제주맛.zip 🍊", 
+        layout="wide",
+        initial_sidebar_state="collapsed"
+    )
 import json
 import os
 import re
@@ -9,7 +15,6 @@ from sys import argv
 os.environ['KMP_DUPLICATE_LIB_OK']='TRUE'
 import google.generativeai as genai 
 import google.ai.generativelanguage as glm
-import streamlit as st
 import faiss
 from sentence_transformers import SentenceTransformer
 from Levenshtein import distance as levenshtein_distance
@@ -162,40 +167,16 @@ safe = [
         "threshold": "BLOCK_NONE",
     },
 ]
-st.set_page_config(
-    page_title="제주맛.zip 🍊", 
-    layout="wide",
-    initial_sidebar_state="collapsed"
-)
 
-st.markdown("""
-    <style>
-    .main { background-color: #FFF5F5; }
-    .stTitle { 
-        font-size: 3rem !important; 
-        color: #FF6B6B !important; 
-        text-align: center;
-        font-weight: bold;
-    }
-    .stSubheader { 
-        color: #4A4A4A !important; 
-        text-align: center;
-        font-size: 1.5rem !important;
-    }
-    .stButton>button {
-        background-color: #FF6B6B;
-        color: white;
-        font-weight: bold;
-        border-radius: 0.5rem;
-        transition: all 0.3s ease;
-    }
-    .stButton>button:hover {
-        background-color: #FF5252;
-        transform: translateY(-2px);
-    }
-    </style>
-    """, unsafe_allow_html=True)
+def load_css():
+    # CSS 파일 경로
+    css_file = os.path.join(os.path.dirname(__file__), "styles.css")
+    
+    # CSS 파일 읽기
+    with open(css_file) as f:
+        st.markdown(f"""<style>{f.read()}</style>""", unsafe_allow_html=True)
 
+    
 @st.cache_resource
 def load_data():
     # CSV 로드
@@ -458,6 +439,7 @@ embed_model, index, nearby_index, name_index = load_index()
 df = load_data()
 history = []
 
+
 # Streamlit 시작
 
 # 세션 상태 초기화
@@ -465,86 +447,122 @@ if "form_submitted" not in st.session_state:
     st.session_state.form_submitted = False  # 폼 제출 상태 확인
 if "system_message_displayed" not in st.session_state:
     st.session_state.system_message_displayed = False
-# if "chat_history" not in st.session_state:
-#     st.session_state.chat_history = []  # 채팅 내역 저장
 if "options" not in st.session_state:
-    st.session_state.options = [None, None, None]
+    st.session_state.options = [None, None]  # [성별, 나이대]만 저장하도록 수정
 
 if "chat_session" not in st.session_state:    
     st.session_state["chat_session"] = model.start_chat(history=[], enable_automatic_function_calling=True) 
 
+# CSS 로드
+load_css()
 
-
-st.title("반갑다!👋")
-st.subheader("제주 맛집을 추천해주겠다")
-st.write("")
-
-if not st.session_state.form_submitted:
-    with st.form(key="user_options_form"):
-        st.write("너에게 맞는 추천을 제공하기위해 정보가 필요하다")
-        st.write("")
-        st.write("맞춤형 추천을 위해 선택하라")
-        option1 = st.selectbox("나이대", ["20대 이하", "30대", "40대", "50대", "60대 이상"])
-        option2 = st.selectbox("방문 시간", ["오전(5시~11시)", "점심(12시~13시)", "오후(14시~17시)", "저녁(18시~22시)", "심야(23시~4시)"])
-        option3 = st.checkbox("현지인 맛집", value=False)
-
-        col1, col2 = st.columns(2)  # 2개의 열 생성
-
-        with col1:
-            submit_button = st.form_submit_button(label="완료")  # 완료 버튼
-
-        with col2:
-            cancel_button = st.form_submit_button(label="생략")  # 생략 버튼 (폼 제출하지 않음)
-    
-    if submit_button:
-
-        # 선택한 옵션을 채팅 기록에 추가
-        # st.session_state.chat_history.append({"role": "assistant", "content": f"선택된 나이대: {option1}, 방문 시간: {option2}, 현지인 기준: {option3}"})
-        try:
-            st.session_state.form_submitted = True
-            st.session_state.options = [option1, option2, option3]
-            print(st.session_state.options)
-            st.rerun()
-        except Exception as e:
-            print(f"오류 발생: {str(e)}")
+# 메인 컨테이너
+with st.container():
+    # 헤더 섹션
+    col1, col2, col3 = st.columns([1,2,1])
+    with col2:
+        st.image("jeju.jpg", use_column_width=True)
         
-    if cancel_button:
-        st.session_state.form_submitted = True
-        # st.session_state.chat_history.append({"role": "assistant", "content": f"옵션 생략"})
-        st.rerun()
+        st.markdown("""
+            <div class="title-container">
+                <span class="emoji-decoration">🍊</span>
+                <span class="main-title">제주맛.zip</span>
+                <span class="emoji-decoration">🌊</span>
+                <div class="sub-title">
+                    님이 원하는 식당 겟또
+                </div>
+            </div>
+        """, unsafe_allow_html=True)
 
-user_input = None
-    
+    # 폼 섹션
+    if not st.session_state.form_submitted:
+        col1, col2, col3 = st.columns([1,2,1])
+        with col2:
+            with st.form("user_options_form"):  # form 키를 문자열로 직접 전달
+                st.markdown('<div class="form-title">🎯 맞춤 설정</div>', unsafe_allow_html=True)
+                st.markdown('<div class="form-subtitle">더 정확한 추천을 위해 정보를 입력해주세요</div>', 
+                          unsafe_allow_html=True)
+                
+                # 입력 필드들을 form 안에 배치
+                input_col1, input_col2 = st.columns(2)
+                
+                with input_col1:
+                    st.markdown('<div class="white-box"></div>', unsafe_allow_html=True)
+                    option1 = st.selectbox(
+                        "성별",
+                        ["남성", "여성"],
+                        key="gender_select"
+                    )
+                
+                with input_col2:
+                    st.markdown('<div class="white-box"></div>', unsafe_allow_html=True)                
+                    option2 = st.selectbox(
+                        "나이대",
+                        ["20대 이하", "30대", "40대", "50대", "60대 이상"],
+                        key="age_select"
+                    )
+                
+                # 버튼들도 form 안에 배치
+                btn_col1, btn_col2 = st.columns(2)
+                with btn_col1:
+                    submit = st.form_submit_button(
+                        "완료",
+                        use_container_width=True,
+                    )
+                with btn_col2:
+                    cancel = st.form_submit_button(
+                        "생략",
+                        use_container_width=True,
+                    )
 
+            # form 밖에서 제출 처리
+            if submit:
+                st.session_state.form_submitted = True
+                st.session_state.options = [option1, option2]
+                st.rerun()
+            
+            if cancel:
+                st.session_state.form_submitted = True
+                st.rerun()
+
+# 채팅 인터페이스
 if st.session_state.form_submitted:
-    # 채팅 입력 받기
-    user_input = st.chat_input("메시지를 입력하세요")   
-    print(st.session_state.options)
+    st.markdown("### 💬 맛집 추천 채팅")
+    with st.container():
+        # 채팅 히스토리 표시
+        for content in st.session_state.chat_session.history:
+            if (len(content.parts) > 1) or not content.parts[0].text:
+                continue
+            with st.chat_message("assistant" if content.role == "model" else "user"):
+                output = content.parts[0].text
+                if content.role == "user":
+                    output = output[output.find("질문:")+3:]
+                st.markdown(output)
+        
+        user_input = st.chat_input("어떤 맛집을 찾으시나요? 상세히 알려주세요!")
 
-for content in st.session_state.chat_session.history:
-    # print(content)
-    if (len(content.parts) > 1) or not content.parts[0].text:
-            continue
-    with st.chat_message("assistant" if content.role == "model" else "user"):
-        output = content.parts[0].text
-        if content.role == "user":
-            output = output[output.find("질문:")+3:]
-        st.markdown(output)
+    if user_input:
+        with st.chat_message("user"):
+            st.markdown(user_input)
+        with st.chat_message("assistant"):
 
-if user_input:
-    with st.chat_message("user"):
-        st.markdown(user_input)
-    with st.chat_message("assistant"):
-        json_prompt = f"""질문에서 요구사항을 보고 JSON의 모든 항목(is_recommend, 주소, 업종, 이용건수구간, 이용금액구간, 건당평균이용금액구간)을 반드시 반환하라\n
+            json_prompt = f"""질문에서 요구사항을 보고 JSON의 모든 항목(is_recommend, 주소, 업종, 이용건수구간, 이용금액구간, 건당평균이용금액구간)을 반드시 반환하라\n
         각 필드의 대한 설명이다. address:주소(예. 제주시 ㅁㅁ읍),    category:업종,   Usage_Count_Range:이용건수구간(예. 이용건수 상위 N%),  Spending_Amount_Range:이용금액구간(예. 이용금액구간 상위 N%),
         Average_Spending_Amount_Range:건당평균이용금액구간(예. 건당평균이용금액 상위 N%), is_recommend:(추천 혹은 연계되는 질문일경우(True), 여러 조건에 따른 검색일경우(False))\n
         ranking_condition는 없을 수도 있으며, 오직 순위를 나타내는 조건(가장 큰것, 가장 작은것)에만 해당한다. 
         \n질문: {user_input}"""
         
         recommend_prompt = f"""너는 제주도의 맛집을 추천해주는 사람이야.
-        사용자의 질문에서 키워드를 찾고 함수를 사용하여 필요한 것을 찾아. 가정하지말고, 모르는걸 말하지마.\n
-        이용건수구간이 작을수록 맛집일 가능성이 높아(예. 상위 10%는 상위 80% 보다 맛집일 거야\n
-        질문: {user_input}"""
+        사용자의 질문에서 키워드를 찾고 함수를 사용하여 필요한 것을 찾아. 가정하지말고, 모르는걸 말하지마.
+        이용건수구간이 작을수록 맛집일 가능성이 높아(예. 상위 10%는 상위 80% 보다 맛집일 거야)
+
+사용자 정보:
+- 성별: {st.session_state.options[0]}
+- 나이대: {st.session_state.options[1]}
+
+해당 성별과 나이대의 이용 비중이 높은 곳을 우선적으로 추천해주세요.
+
+질문: {user_input}"""
         
         print("입력", json_prompt)
         print("프롬프트 토큰", model.count_tokens(json_prompt))
