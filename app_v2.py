@@ -12,7 +12,6 @@ import google.ai.generativelanguage as glm
 import streamlit as st
 import faiss
 from sentence_transformers import SentenceTransformer
-from Levenshtein import distance as levenshtein_distance
 
 with open('./secrets.json') as f:
     secrets = json.loads(f.read())
@@ -68,7 +67,7 @@ class Category(enum.Enum):
     NONE = "None"
     Homestyle = "가정식"
     Chinese = "중식"
-    SingleMenu = "단품요리 전문점"
+    SingleMenu = "단품요리 전문"
     Coffee = "커피"
     IceCream = "아이스크림/빙수"
     Pizza = "피자"
@@ -184,7 +183,7 @@ def load_index():
 # 추천용 함수
 
 def search_by_location(region: str, type: str):
-    """특정 지역(예: 제주시 한림읍, 제주공항)의 특정 업종(예: 카페)인 식당목록을 반환합니다. 조건:정렬이 필요없을것
+    """특정 지역(예: 제주시 한림읍, 제주공항)의 특정 업종(예: 카페)인 식당목록을 반환합니다.
 
     Args:
         region (str): 지역명(예. 제주시 한림읍, 제주공항)
@@ -256,17 +255,17 @@ def map_to_group(raw_percentage):
         return None
     
     output = None
-    if 0 <= percentage < 10:
-        output = '1_상위10%이하'
-    elif 10 <= percentage < 25:
+    if 0 <= percentage <= 10:
+        output = '1_상위 10% 이하'
+    elif 10 < percentage <= 25:
         output = '2_10~25%'
-    elif 25 <= percentage < 50:
+    elif 25 < percentage <= 50:
         output = '3_25~50%'
-    elif 50 <= percentage < 75:
+    elif 50 < percentage <= 75:
         output = '4_50~75%'
-    elif 75 <= percentage < 90:
+    elif 75 < percentage <= 90:
         output =  '5_75~90%'
-    elif 90 <= percentage <= 100:
+    elif 90 < percentage <= 100:
         output = '6_90% 초과(하위 10% 이하)'
     print(f"{raw_percentage}->{output}")
     return output
@@ -322,7 +321,7 @@ def filtering(dic):
     # 일반 쿼리 대응
     addr = dic.get("address", None)
     mct_type = dic.get("category", None)
-    ranking_condition = dic.get('ranking_condition', {})
+    ranking_condition = dic.get('ranking_condition', None)
     filter_type = ranking_condition.get('filter_type', None)
     order_type = ranking_condition.get('order_type', None)
     
@@ -331,31 +330,46 @@ def filtering(dic):
     spending_Amount_Range = map_to_group(dic.get("Spending_Amount_Range", None))
     average_Spending_Amount_Range = map_to_group(dic.get("Average_Spending_Amount_Range", None))
     
+    # 출력용 텍스트
+    output_conditions = ""
+    
     # 필터링
     conditions = []
     if addr is not None:
         conditions.append(df['ADDR'].str.contains(addr, na=False))
+        output_conditions += f"주소: {addr}<br>"
     if mct_type is not None:
         conditions.append(df['MCT_TYPE'].str.contains(mct_type, na=False))
+        output_conditions += f"업종: {mct_type}<br>"
     if usage_Count_Range is not None:
         conditions.append(df['UE_CNT_GRP'] == usage_Count_Range)
+        output_conditions += f"이용건수: {usage_Count_Range[2:]}<br>"
     if spending_Amount_Range is not None:
         conditions.append(df['UE_AMT_GRP'] == spending_Amount_Range)
+        output_conditions += f"이용금액: {spending_Amount_Range[2:]}<br>"
     if average_Spending_Amount_Range is not None:
         conditions.append(df['UE_AMT_PER_TRSN_GRP'] == average_Spending_Amount_Range)
+        output_conditions += f"건당평균이용금액: {average_Spending_Amount_Range[2:]}<br>"
         
     if conditions:
         filtered_df = df.loc[pd.concat(conditions, axis=1).all(axis=1)]
+        print("1차 필터링", len(filtered_df))
+    else:
+        return "대답할 수 없는 질문입니다.."
     
     if filter_type != "None" and order_type != "None":
         is_ascending = (order_type == "lowest")
         filtered_df = filtered_df.sort_values(by=matching_keys.get(filter_type, None), ascending=is_ascending)
+        asending_text = "오름차순" if is_ascending else "내림차순"
+        output_conditions += f"정렬조건: {filter_type} {asending_text}"
     
     output = None
     if len(filtered_df) == 0:
+        print("조건", output_conditions)
         output = "검색 결과가 없습니다."
     else:
-        output = f"### 조건에 해당하는 식당을 찾았습니다.\n식당명: {filtered_df.iloc[0]['MCT_NM']}<br>주소: {filtered_df.iloc[0]['ADDR']}"
+        # 조건 출력
+        output = f"### 조건에 해당하는 식당을 찾았습니다.\n**식당명**: {filtered_df.iloc[0]['MCT_NM']}<br>**주소**: {filtered_df.iloc[0]['ADDR']}<hr>**조건**<br>{output_conditions}"
     
     return output
 
@@ -438,7 +452,8 @@ if "system_message_displayed" not in st.session_state:
 #     st.session_state.chat_history = []  # 채팅 내역 저장
 if "options" not in st.session_state:
     st.session_state.options = [None, None, None]
-
+if 'history' not in st.session_state:
+    st.session_state.history = []
 if "chat_session" not in st.session_state:    
     st.session_state["chat_session"] = model.start_chat(history=[], enable_automatic_function_calling=True) 
 
@@ -490,23 +505,25 @@ if st.session_state.form_submitted:
     user_input = st.chat_input("메시지를 입력하세요")   
     print(st.session_state.options)
 
-for content in st.session_state.chat_session.history:
+for content in st.session_state.history:
     # print(content)
-    if (len(content.parts) > 1) or not content.parts[0].text:
-            continue
-    with st.chat_message("assistant" if content.role == "model" else "user"):
-        output = content.parts[0].text
-        if content.role == "user":
+    with st.chat_message("assistant" if content['role'] == "model" else "user"):
+        output = content['parts'][0]['text']
+        if content['role'] == "user":
             output = output[output.find("질문:")+3:]
-        st.markdown(output)
+        st.markdown(output, unsafe_allow_html=True)
 
 if user_input:
+    st.session_state.history.append({
+        'role': 'user',
+        'parts': [{'text': user_input}]
+    })
     with st.chat_message("user"):
         st.markdown(user_input)
     with st.chat_message("assistant"):
         json_prompt = f"""질문에서 요구사항을 보고 JSON의 모든 항목(is_recommend, 주소, 업종, 이용건수구간, 이용금액구간, 건당평균이용금액구간)을 반드시 반환하라\n
         각 필드의 대한 설명이다. address:주소(예. 제주시 ㅁㅁ읍),    category:업종,   Usage_Count_Range:이용건수구간(예. 이용건수 상위 N%),  Spending_Amount_Range:이용금액구간(예. 이용금액구간 상위 N%),
-        Average_Spending_Amount_Range:건당평균이용금액구간(예. 건당평균이용금액 상위 N%), is_recommend:(추천 혹은 연계되는 질문일경우(True), 여러 조건에 따른 검색일경우(False))\n
+        Average_Spending_Amount_Range:건당평균이용금액구간(예. 건당평균이용금액 상위 N%), is_recommend:(추천 혹은 연계되는 질문일경우(True. 예시: 추천해줘), 조건에 따른 검색일경우(False. 예시:조건이 XX하고, 가장 XX한것은?))\n
         ranking_condition는 없을 수도 있으며, 오직 순위를 나타내는 조건(가장 큰것, 가장 작은것)에만 해당한다. 
         \n질문: {user_input}"""
         
@@ -531,12 +548,16 @@ if user_input:
             tools=[]) 
             dic2 = merge_dicts(json.loads(response2.parts[0].text))
             # 조건 체크 (만약 처음엔 false였는데 갑자기 true)
-            if dic2.get("is_recommend", None):
+            if dic2.get("is_recommend"):
                 print("원래 검색이였는데, 다음은 추천으로 인식")
             correct_dic = dic if len(dic) > len(dic2) else dic2
             print(f"2개 중 선택\n{dic}\n{dic2}\n->{correct_dic}")
             output = filtering(correct_dic)
             print("검색 출력", output)
+            st.session_state.history.append({
+                'role': 'model',
+                'parts': [{'text': output}]
+            })
             st.markdown(output, unsafe_allow_html=True) # 이런식으로 직접 넣는거면, history를 통해서 채팅 재구성은 불가능하다. 직접 로그를 구성해야
         # 추천방식. 정확도가 필요없다. 아마 여기에 나이대, 성별 가중치를 적용할것(프롬프트로?)
         else:
@@ -544,8 +565,11 @@ if user_input:
             output = st.session_state.chat_session.send_message(recommend_prompt,
                 generation_config=genai.GenerationConfig(response_mime_type="text/plain", response_schema=None), tools=function_repository.values()) 
             st.markdown(output.text)
+            st.session_state.history.append({
+                'role': 'model',
+                'parts': [{'text': output.text}]
+            })
         print('-'*50)
-        # 고민할점. 함수 호출 on/off가 상시로 가능한가. tools를 직접 None으로 설정하기
         
 # 제주시 한림읍에 있는 카페 목록이 필요해
 # 제주시청역 근처 중국집 추천해줄래?
