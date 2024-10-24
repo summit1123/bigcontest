@@ -8,6 +8,7 @@ import json
 import os
 import re
 import pandas as pd
+df = pd.read_csv('data/final_tour.csv', encoding='cp949')
 import numpy as np
 import typing_extensions as typing
 import enum
