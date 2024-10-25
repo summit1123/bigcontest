@@ -136,7 +136,7 @@ class Query(typing.TypedDict):
     category: Category
     Usage_Count_Range: str
     Spending_Amount_Range: str
-    Average_Spending_Amount_Range: str # Range쓰면 분류 잘못함.
+    Average_Spending_Amount_Range: str
     # Visit_count_specific: VisitCountShare
     # Local_Visitor_Proportion: float
     ranking_condition: FilterOrder
@@ -167,7 +167,8 @@ st.set_page_config(page_title="🍊제주 맛집 추천")
 @st.cache_resource
 def load_data():
     # CSV 로드
-    csv_file_path = "final_coordinates.csv"
+    # csv_file_path = "final_coordinates.csv"
+    csv_file_path = "final_merged_data_cleaned.csv"
     df = pd.read_csv(os.path.join('./data', csv_file_path),encoding='cp949')
     return df
 
@@ -177,29 +178,50 @@ def load_index():
     index = faiss.read_index("store_index.faiss")
     name_index = faiss.read_index("name_index.faiss")
     nearby_index = faiss.read_index("store_nearby_index.faiss")
+    category_index = faiss.read_index("category_index.faiss")
     print("index loaded")
     return emb_model, index, nearby_index, name_index
 
 # 추천용 함수
 
-def search_by_location(region: str, type: str):
-    """특정 지역(예: 제주시 한림읍, 제주공항)의 특정 업종(예: 카페)인 식당목록을 반환합니다.
+def search_by_location(region: str, type: str, preference: str=None):
+    """특정 지역(예: 제주시 한림읍, 제주공항)의 특정 업종(예: 카페)인 식당목록을 반환합니다. 선호하는것이 있다면 적용합니다.
 
     Args:
         region (str): 지역명(예. 제주시 한림읍, 제주공항)
         type (str): 업종(예. 카페)
+        preference (str, optional) 선호 사항(예. 전망(바다, 산, 일몰), 인테리어(모던, 고급스러운, 로맨틱한, 전통적인), 맛(감칠맛, 매운맛), 계절메뉴, 수제, 제주산 식재료)
 
     Returns:
         array: 조건에 맞는 식당 목록이 담긴 배열
     """
     # 예시 데이터 반환 (추후 실제 데이터로 교체)
-    print(f"Call: search_by_location region:{region}, type:{type}")
+    print(f"Call: search_by_location region:{region}, type:{type}, preference:{preference}")
     query_embedding = embed_model.encode([f"{region} {type}"])
-    D, I = index.search(query_embedding, k=10)
-    # result = df.iloc[I[0]]  # 검색된 인덱스 번호와 원본 데이터프레임 연결
+    D, I = index.search(query_embedding, k=20)
+    
+    # 인덱스 결과에서 추출한 식당 데이터
+    results = [df.iloc[i] for i in I[0]]
+
+    # 선호 사항이 있는 경우 선호 사항과 Category 열의 유사도를 비교
+    if preference:
+        prefer_embedding = embed_model.encode(preference)
+
+        # 각 식당의 Category 임베딩과 prefer_embedding 간의 유사도 계산
+        similarities = []
+        for result in results:
+            category_embedding = embed_model.encode(f"{result['VIEW']} {result['INTERIOR']} {result['TASTE']} {result['SPECIALTY']}")
+            similarity = np.dot(prefer_embedding, category_embedding)  # 코사인 유사도
+            similarities.append((result, similarity))
+
+        # 유사도가 높은 순으로 정렬하여 상위 5개 선택
+        top_results = sorted(similarities, key=lambda x: x[1], reverse=True)[:10]
+        results = [res[0] for res in top_results]
+
+    # 선택된 결과를 문자열 형식으로 변환
     string_results = [
-        f"이름: {df.iloc[i]['MCT_NM']}, 업종: {df.iloc[i]['MCT_TYPE']}, 주소: {df.iloc[i]['ADDR']}, 이용건수구간: 상위 {str(df.iloc[i]['UE_CNT_GRP'][2:]).replace('~', '-')}"
-        for i in I[0]
+        f"이름: {res['MCT_NM']}, 업종: {res['MCT_TYPE']}, 주소: {res['ADDR']}, 이용건수구간: 상위 {str(res['UE_CNT_GRP'][2:]).replace('~', '-')}, 리뷰요약: {res['REVIEW_SUMMARY']}, 가게소개: {res['DESC_SUMMARY']}, 분류: {result['VIEW']} {result['INTERIOR']} {result['TASTE']} {result['SPECIALTY']}"
+        for res in results
     ]
     print(string_results)
     return string_results
@@ -209,7 +231,7 @@ def search_nearby_location(place: str):
 
     Args:
         place (str): 식당 및 장소명(예. 제제김밥, 제주공항)
-        
+
     Returns:
         array: 조건에 맞는 식당 목록이 담긴 배열
     """
@@ -369,7 +391,7 @@ def filtering(dic):
         output = "검색 결과가 없습니다."
     else:
         # 조건 출력
-        output = f"### 조건에 해당하는 식당을 찾았습니다.\n**식당명**: {filtered_df.iloc[0]['MCT_NM']}<br>**주소**: {filtered_df.iloc[0]['ADDR']}<hr>**조건**<br>{output_conditions}"
+        output = f"### 조건에 해당하는 식당을 찾았습니다.\n**식당명**: {filtered_df.iloc[0]['MCT_NM']}<br>**주소**: {filtered_df.iloc[0]['ADDR']}<hr>##### **조건**<br>{output_conditions}"
     
     return output
 
@@ -530,6 +552,7 @@ if user_input:
         recommend_prompt = f"""너는 제주도의 맛집을 추천해주는 사람이야.
         사용자의 질문에서 키워드를 찾고 함수를 사용하여 필요한 것을 찾아. 가정하지말고, 모르는걸 말하지마.\n
         이용건수구간이 작을수록 맛집일 가능성이 높아(예. 상위 10%는 상위 80% 보다 맛집일 거야\n
+        가게의 리뷰요약과 가게소개를 보고 추천하면서 설명해줘\n
         질문: {user_input}"""
         
         print("입력", json_prompt)
