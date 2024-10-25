@@ -175,10 +175,10 @@ def load_data():
 @st.cache_resource
 def load_index():
     emb_model = SentenceTransformer('jhgan/ko-sroberta-multitask')
-    index = faiss.read_index("store_index.faiss")
-    name_index = faiss.read_index("name_index.faiss")
-    nearby_index = faiss.read_index("store_nearby_index.faiss")
-    category_index = faiss.read_index("category_index.faiss")
+    index = faiss.read_index("store_index_2.faiss")
+    name_index = faiss.read_index("name_index_2.faiss")
+    nearby_index = faiss.read_index("store_nearby_index_2.faiss")
+    # category_index = faiss.read_index("category_index.faiss")
     print("index loaded")
     return emb_model, index, nearby_index, name_index
 
@@ -586,7 +586,7 @@ if user_input:
         else:
             print("추천 출력", recommend_prompt)
             output = st.session_state.chat_session.send_message(recommend_prompt,
-                generation_config=genai.GenerationConfig(response_mime_type="text/plain", response_schema=None), tools=function_repository.values()) 
+                generation_config=genai.GenerationConfig(response_mime_type="text/plain", response_schema=None, temperature=0.1), tools=function_repository.values()) 
             st.markdown(output.text)
             st.session_state.history.append({
                 'role': 'model',
