@@ -168,7 +168,7 @@ st.set_page_config(page_title="🍊제주 맛집 추천")
 def load_data():
     # CSV 로드
     # csv_file_path = "final_coordinates.csv"
-    csv_file_path = "final_merged_data_cleaned.csv"
+    csv_file_path = "final_restaurant_data.csv"
     df = pd.read_csv(os.path.join('./data', csv_file_path),encoding='cp949')
     return df
 
