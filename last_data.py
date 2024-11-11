@@ -1,111 +1,68 @@
 import pandas as pd
 
-# 허용된 키워드 정의
-VALID_KEYWORDS = {
-    'VIEW': {
-        '바다 전망',
-        '일몰 뷰',
-        '산 전망',
-        '-'
-    },
-    'INTERIOR': {
-        '모던한',
-        '빈티지',
-        '전통적인',
-        '고급스러운',
-        '캐주얼한',
-        '로맨틱한',
-        '-'
-    },
-    'TASTE': {
-        '매운맛',
-        '진한맛',
-        '담백한',
-        '달콤한',
-        '감칠맛',
-        '-'
-    },
-    'SPECIALTY': {
-        '제주 식재료',
-        '계절 메뉴',
-        '수제/직접만든',
-        '-'
-    }
-}
-
-def validate_and_clean_keywords():
+def process_restaurant_data():
+    """
+    원본 데이터와 업데이트 데이터를 병합하고 새로운 파일로 저장하는 함수
+    """
     try:
-        # 데이터 로드
-        df = pd.read_csv('data/final_merged_data_fixed.csv', encoding='cp949')
+        # 파일 경로 설정
+        original_file = 'data/final_restaurant_data.csv'
+        updated_file = 'data/review_data_updated_analyzed.csv'
+        output_file = 'data/final_restaurant_data_v2.csv'
         
-        print(f"전체 데이터 수: {len(df)}")
+        print("데이터 파일 읽는 중...")
         
-        # 각 카테고리별 키워드 검증 및 정리
-        stats = {}
-        for category in VALID_KEYWORDS.keys():
-            invalid_count = 0
-            valid_count = 0
-            english_count = 0
-            
-            def clean_keyword(keyword):
-                nonlocal invalid_count, valid_count, english_count
-                
-                if pd.isna(keyword) or keyword == '':
-                    invalid_count += 1
-                    return '-'
-                    
-                # 영어 키워드 체크 (영어 알파벳 포함 여부)
-                if any(c.isascii() and c.isalpha() for c in keyword):
-                    english_count += 1
-                    return '-'
-                
-                # 유효한 키워드인지 체크
-                if keyword in VALID_KEYWORDS[category]:
-                    valid_count += 1
-                    return keyword
-                else:
-                    invalid_count += 1
-                    return '-'
-            
-            # 키워드 정리
-            df[category] = df[category].apply(clean_keyword)
-            
-            # 통계 저장
-            stats[category] = {
-                'valid': valid_count,
-                'invalid': invalid_count,
-                'english': english_count,
-                'total': len(df)
-            }
+        # 원본 데이터 읽기
+        try:
+            print("utf-8-sig로 시도...")
+            df_original = pd.read_csv(original_file, encoding='utf-8-sig')
+        except:
+            try:
+                print("cp949로 시도...")
+                df_original = pd.read_csv(original_file, encoding='cp949')
+            except:
+                print("utf-8로 시도...")
+                df_original = pd.read_csv(original_file, encoding='utf-8')
         
-        # 결과 저장
-        df.to_csv('data/final_merged_data_cleaned_final.csv', index=False, encoding='cp949')
+        print(f"원본 데이터 레코드 수: {len(df_original)}")
         
-        # 결과 출력
-        print("\n=== 카테고리별 키워드 검증 결과 ===")
-        for category, stat in stats.items():
-            print(f"\n{category}:")
-            print(f"- 전체 데이터: {stat['total']:,}개")
-            print(f"- 유효한 키워드: {stat['valid']:,}개 ({stat['valid']/stat['total']*100:.1f}%)")
-            print(f"- 유효하지 않은 키워드: {stat['invalid']:,}개 ({stat['invalid']/stat['total']*100:.1f}%)")
-            print(f"- 영어 키워드: {stat['english']:,}개 ({stat['english']/stat['total']*100:.1f}%)")
-            
-            print("\n현재 키워드 분포:")
-            value_counts = df[category].value_counts()
-            print(value_counts)
+        # 업데이트할 데이터 읽기
+        df_updated = pd.read_csv(updated_file, encoding='utf-8-sig')
+        print(f"업데이트 데이터 레코드 수: {len(df_updated)}")
         
-        print("\n=== 샘플 데이터 ===")
-        print(df[['MCT_NM'] + list(VALID_KEYWORDS.keys())].head())
+        # 필요한 컬럼만 선택
+        update_columns = ['MCT_NM', 'review_summary', 'desc_summary', 'keywords']
+        df_updated = df_updated[update_columns]
         
-        return df, stats
+        # 데이터 병합
+        df_result = pd.merge(df_original, df_updated, on='MCT_NM', how='left')
+        
+        # 제거할 컬럼 리스트
+        columns_to_remove = ['REVIEW_SUMMARY', 'DESC_SUMMARY', 'VIEW', 'INTERIOR', 'TASTE', 'SPECIALTY']
+        
+        # 원본 데이터에서 해당 컬럼들 제거
+        existing_columns = [col for col in columns_to_remove if col in df_result.columns]
+        df_result = df_result.drop(columns=existing_columns)
+        
+        # 결과 확인 및 저장
+        print("\n처리 결과:")
+        print(f"제거된 컬럼: {existing_columns}")
+        print(f"남은 컬럼 수: {len(df_result.columns)}")
+        print(f"남은 컬럼 목록: {', '.join(df_result.columns)}")
+        
+        # 데이터 샘플 확인
+        print("\n첫 번째 레코드 샘플:")
+        print(df_result.iloc[0])
+        
+        # 결과 파일 저장
+        df_result.to_csv(output_file, index=False, encoding='utf-8-sig')
+        print(f"\n처리된 데이터가 {output_file}에 저장되었습니다.")
         
     except Exception as e:
-        print(f"에러 발생: {str(e)}")
-        raise e
+        print(f"오류가 발생했습니다: {str(e)}")
+        print("스택 트레이스:")
+        import traceback
+        traceback.print_exc()
 
 if __name__ == "__main__":
-    try:
-        df, stats = validate_and_clean_keywords()
-        print("\n데이터 정리가 완료되었습니다.")
-    except Exception as e:
-        print(f"최종 에러: {str(e)}")
+    process_restaurant_data()
