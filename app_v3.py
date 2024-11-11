@@ -8,7 +8,7 @@ import json
 import os
 import re
 import pandas as pd
-df = pd.read_csv('data/final_tour.csv', encoding='cp949')
+df = pd.read_csv('data/final_tour_v2.csv', encoding='utf-8-sig')
 import numpy as np
 import typing_extensions as typing
 import enum
@@ -181,8 +181,8 @@ def load_css():
 @st.cache_resource
 def load_data():
     # CSV 로드
-    csv_file_path = "final_coordinates.csv"
-    df = pd.read_csv(os.path.join('./data', csv_file_path),encoding='cp949')
+    csv_file_path = "final_restaurant_data_v2.csv"
+    df = pd.read_csv(os.path.join('./data', csv_file_path),encoding='utf-8-sig')
     return df
 
 @st.cache_resource
